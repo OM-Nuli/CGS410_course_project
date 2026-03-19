@@ -1,0 +1,63 @@
+This project investigates whether large language models (LLMs) exhibit Dependency Length Minimization (DLM)—a fundamental property of human languages where syntactically related words tend to be placed close together to reduce cognitive load and improve processing efficiency.
+
+Human languages are known to optimize sentence structure by minimizing the distance between dependent words and their heads. However, modern LLMs are trained purely on next-word prediction objectives, without explicit constraints enforcing such structural efficiency. This raises an important question:
+Do LLMs naturally learn and reproduce dependency length minimization?
+
+To explore this, we design a comparative pipeline involving three types of data:
+
+Human Language Data
+We use annotated corpora from Universal Dependencies (UD) treebanks across multiple languages. These datasets provide gold-standard dependency parses, allowing us to measure baseline dependency lengths in natural human language.
+
+LLM-Generated Sentences
+Sentences are generated using a language model (e.g., GPT-2 or similar) based on controlled prompts. These sentences are then parsed using a dependency parser to extract their syntactic structure.
+
+Random Baseline
+To establish an upper bound, we create randomized versions of sentences by shuffling word order while preserving the original dependency structure. This simulates inefficient, non-optimized language.
+
+Methodology
+
+For each sentence, we compute dependency length as the linear distance between a word and its syntactic head:
+
+Distance = |position of dependent − position of head|
+
+We then calculate:
+
+Average dependency length per sentence
+
+Distribution of dependency lengths
+
+Dependency length as a function of sentence length
+
+This allows us to systematically compare structural efficiency across datasets.
+
+Analysis & Comparison
+
+We evaluate and compare:
+
+Human vs LLM dependency lengths
+
+LLM vs randomized baseline
+
+Trends across varying sentence lengths
+
+The results are visualized using graphs such as:
+
+Dependency length vs sentence length
+
+Distribution plots (histograms)
+
+Comparative box plots
+
+Objective
+
+The goal is to determine whether LLMs:
+
+Replicate human-like syntactic efficiency
+
+Produce longer or less optimized dependencies
+
+Exhibit entirely different structural patterns
+
+Outcome
+
+This project provides insights into whether statistical language models implicitly learn deep linguistic principles like dependency length minimization, contributing to our understanding of how closely LLMs mirror human language structure.
