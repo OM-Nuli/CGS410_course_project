@@ -1,11 +1,4 @@
-from src.parser.llm_parser import parse_llm
+from src.parser.ud_parser import parse_ud
 
-sentences = [
-    "The dog runs",
-    "A cat sleeps on the mat"
-]
-
-data = parse_llm(sentences)
-
-for d in data:
-    print(d)
+data = parse_ud("data/UD_English-EWT/en_ewt-ud-train.conllu")
+print(data[0])
