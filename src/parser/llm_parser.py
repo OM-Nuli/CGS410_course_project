@@ -1,60 +1,55 @@
-import spacy
+import stanza
 
-# Load the spaCy English model once (efficient — don't reload per sentence)
-nlp = spacy.load("en_core_web_sm")
+# Cache loaded models to avoid reloading
+_models = {}
+
+def get_model(lang_code):
+    """Load and cache Stanza model for a given language"""
+    if lang_code not in _models:
+        _models[lang_code] = stanza.Pipeline(lang_code, processors='tokenize,pos,lemma,depparse', verbose=False)
+    return _models[lang_code]
 
 
-def process_raw_sentence(sentence):
+def process_raw_sentence(sentence, lang_code):
     """
-    Takes a raw sentence and computes:
-    - average dependency length
-    - sentence length
+    Parse a raw sentence and compute average dependency length
     """
-
-    # Process sentence with spaCy → creates tokens + dependency tree
+    nlp = get_model(lang_code)
     doc = nlp(sentence)
 
     dep_lengths = []
 
-    # Iterate over each token in the sentence
-    for token in doc:
+    for sent in doc.sentences:
+        for word in sent.words:
+            # Skip ROOT (head is 0 in Stanza)
+            if word.head == 0:
+                continue
 
-        # If token is ROOT (its head is itself), skip it
-        if token.head.i == token.i:
-            continue
+            # word.id and word.head are 1-based in Stanza
+            distance = abs(word.id - word.head)
+            dep_lengths.append(distance)
 
-        # Compute dependency distance:
-        # token.i = position of word
-        # token.head.i = position of its head
-        distance = abs(token.i - token.head.i)
-
-        dep_lengths.append(distance)
-
-    # Compute average dependency length
     if len(dep_lengths) > 0:
         avg_dep_length = sum(dep_lengths) / len(dep_lengths)
     else:
-        avg_dep_length = 0  # edge case (empty or weird sentence)
+        avg_dep_length = 0
 
-    # Return clean structured output (same format as UD parser)
     return {
         "sentence": sentence,
         "avg_dep_length": avg_dep_length,
-        "sentence_length": len(doc)  # number of tokens
+        "sentence_length": sum(len(s.words) for s in doc.sentences)
     }
 
 
-def parse_llm(sentences):
+def parse_llm(sentences, lang_code):
     """
-    Takes a list of sentences (LLM-generated or any raw text)
-    and returns processed dependency metrics for each sentence
+    Takes a list of sentences and a language code
+    Returns processed dependency metrics
     """
-
     results = []
 
-    # Process each sentence one by one
     for sent in sentences:
-        result = process_raw_sentence(sent)
+        result = process_raw_sentence(sent, lang_code)
         results.append(result)
 
     return results
