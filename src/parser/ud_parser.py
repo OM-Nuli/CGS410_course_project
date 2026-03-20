@@ -1,5 +1,6 @@
 from conllu import parse_incr
 
+# Step 1: Read .conllu file
 def read_conllu(file_path):
     sentences = []
 
@@ -21,6 +22,7 @@ def read_conllu(file_path):
 
     return sentences
 
+# Step 2: Compute dependency length
 def compute_dependency_lengths(tokens, heads):
     dep_lengths = []
 
@@ -34,6 +36,7 @@ def compute_dependency_lengths(tokens, heads):
 
     return dep_lengths
 
+# Step 3: Process a single sentence
 def process_sentence(tokens, heads):
     dep_lengths = compute_dependency_lengths(tokens, heads)
 
@@ -44,9 +47,24 @@ def process_sentence(tokens, heads):
 
     return {
         "sentence": " ".join(tokens),
-        "tokens": tokens,
-        "heads": heads,
-        "dep_lengths": dep_lengths,
         "avg_dep_length": avg_dep_length,
         "sentence_length": len(tokens)
     }
+
+# Step 4: Process entire UD file
+def parse_ud_file(file_path):
+    raw_sentences = read_conllu(file_path)
+
+    processed_data = []
+
+    for sent in raw_sentences:
+        result = process_sentence(
+            sent["tokens"],
+            sent["heads"]
+        )
+        processed_data.append(result)
+
+    return processed_data
+
+def parse_ud(file_path):
+    return parse_ud_file(file_path)
