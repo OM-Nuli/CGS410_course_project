@@ -96,15 +96,15 @@ def parse_llm(sentences, lang_code):
 INPUT_BASE = "/kaggle/input"
 INPUT_CSV_DIR = None
 
-
 for root, dirs, files in os.walk(INPUT_BASE):
-    if 'outputs2' in dirs:
-        INPUT_CSV_DIR = os.path.join(root, 'outputs2')
+    if "outputs2_sentence_generation" in dirs:
+        INPUT_CSV_DIR = os.path.join(root, "outputs2_sentence_generation")
         break
 
 if not INPUT_CSV_DIR:
-    raise FileNotFoundError("Could not find the 'outputs2' folder! Please check the right-hand panel to ensure your dataset is attached.")
+    raise FileNotFoundError("Could not find 'outputs2_sentence_generation' folder!")
 
+print("✅ Found dataset at:", INPUT_CSV_DIR)
 OUTPUT_DIR = "/kaggle/working/outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -125,11 +125,12 @@ for lang_name, lang_code in languages.items():
     if os.path.exists(csv_path):
        
         df = pd.read_csv(csv_path)
-        sentences = df.iloc[:, 0].dropna().astype(str).tolist()
+        sentences = df["sentence"].dropna().astype(str).tolist()
         print(f"Found {len(sentences)} sentences. Parsing...")
         
   
         raw_data = parse_llm(sentences, lang_code)
+        print("Sample raw output:", raw_data[:5])
             
       
         cleaned_data = [d for d in raw_data if d["sentence_length"] > 2 and d["avg_dep_length"] > 0]
