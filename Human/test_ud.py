@@ -1,4 +1,9 @@
-from src.parser.ud_parser import parse_ud
-
-data = parse_ud("data/UD_English-EWT/en_ewt-ud-train.conllu")
-print(data[0])
+python -c "
+import stanza
+nlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse', tokenize_pretokenized=True, verbose=False)
+doc = nlp('The dog runs in the park')
+for sent in doc.sentences:
+    for word in sent.words:
+        print(word.text, word.head)
+print('SUCCESS')
+"
