@@ -1,80 +1,143 @@
+import json
+import os
 import random
 import stanza
+from conllu import parse_incr
 
-# Cache loaded models to avoid reloading
+LANGUAGES = {
+    "english":    ("/kaggle/input/datasets/omnuli/cgs410-dlm/CGS410_course_project/Human/Data_ud/UD-English-EWT/en_ewt-ud-train.conllu",    "en"),
+    "chinese":    ("/kaggle/input/datasets/omnuli/cgs410-dlm/CGS410_course_project/Human/Data_ud/UD-Chinese-GSD/zh_gsd-ud-train.conllu",    "zh"),
+    "thai":       ("/kaggle/input/datasets/omnuli/cgs410-dlm/CGS410_course_project/Human/Data_ud/UD-Thai-TUD/th_tud-ud-train.conllu",        "th"),
+    "vietnamese": ("/kaggle/input/datasets/omnuli/cgs410-dlm/CGS410_course_project/Human/Data_ud/UD-Vietnamese-VTB/vi_vtb-ud-train.conllu",  "vi"),
+    "indonesian": ("/kaggle/input/datasets/omnuli/cgs410-dlm/CGS410_course_project/Human/Data_ud/UD-Indonesian-GSD/id_gsd-ud-train.conllu",  "id"),
+    "spanish":    ("/kaggle/input/datasets/omnuli/cgs410-dlm/CGS410_course_project/Human/Data_ud/UD-Spanish-GSD/es_gsd-ud-train.conllu",     "es"),
+}
+
+OUTPUT_DIR = "/kaggle/working/Random/outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+print(f"Output dir ready: {OUTPUT_DIR}")
+print(f"Dir exists: {os.path.exists(OUTPUT_DIR)}")
+
+def is_punctuation_token(token):
+    return token.get("upos") == "PUNCT"
+
+def read_and_clean_conllu(file_path):
+    cleaned_sentences = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        for tokenlist in parse_incr(f):
+            tokens = []
+            for token in tokenlist:
+                if not isinstance(token["id"], int):
+                    continue
+                if is_punctuation_token(token):
+                    continue
+                tokens.append(token["form"])
+            if len(tokens) >= 3:
+                cleaned_sentences.append(tokens)
+    return cleaned_sentences
+
+def shuffle_sentences(sentences):
+    shuffled = []
+    for tokens in sentences:
+        tokens_copy = tokens[:]
+        random.shuffle(tokens_copy)
+        shuffled.append(" ".join(tokens_copy))
+    return shuffled
+
 _models = {}
 
 def get_model(lang_code):
-    """Load and cache Stanza model for a given language"""
     if lang_code not in _models:
-        _models[lang_code] = stanza.Pipeline(lang_code, processors='tokenize,pos,lemma,depparse', verbose=False)
+        print(f"   Loading Stanza model for '{lang_code}'...")
+        _models[lang_code] = stanza.Pipeline(
+            lang_code,
+            processors='tokenize,pos,lemma,depparse',
+            verbose=False,
+            use_gpu=False
+        )
     return _models[lang_code]
 
-
-def shuffle_sentence(sentence, lang_code):
-    """
-    Tokenize using Stanza first, then shuffle tokens.
-    Handles languages without spaces (Chinese, Thai, etc.)
-    """
-    nlp = get_model(lang_code)
-    doc = nlp(sentence)
-
-    # Extract tokens using Stanza tokenizer
-    words = [word.text for sent in doc.sentences for word in sent.words]
-    original = words.copy()
-
-    # Keep shuffling until order actually changes
-    while words == original:
-        random.shuffle(words)
-
-    return " ".join(words)
-
-
-def process_random_sentence(sentence, lang_code):
-    """
-    Takes a human sentence, shuffles it, parses it,
-    and computes average dependency length.
-    This serves as the random (no structure) baseline.
-    """
-    # Step 1: shuffle word order using Stanza tokenizer
-    shuffled = shuffle_sentence(sentence, lang_code)
-
-    # Step 2: parse shuffled sentence with Stanza
-    nlp = get_model(lang_code)
-    doc = nlp(shuffled)
-
+def compute_dependency_lengths(doc):
     dep_lengths = []
-
     for sent in doc.sentences:
         for word in sent.words:
-            # Skip ROOT
             if word.head == 0:
                 continue
-
             distance = abs(word.id - word.head)
             dep_lengths.append(distance)
+    if len(dep_lengths) == 0:
+        return 0
+    return sum(dep_lengths) / len(dep_lengths)
 
-    if len(dep_lengths) > 0:
-        avg_dep_length = sum(dep_lengths) / len(dep_lengths)
-    else:
-        avg_dep_length = 0
-
-    return {
-        "sentence": shuffled,
-        "avg_dep_length": avg_dep_length,
-        "sentence_length": sum(len(s.words) for s in doc.sentences)
-    }
-
-
-def parse_random(sentences, lang_code):
-    """
-    Takes a list of human sentences and a language code.
-    Returns random baseline dependency metrics.
-    """
+def parse_sentences(sentences, lang_code):
+    nlp = get_model(lang_code)
     results = []
 
-    for sent in sentences:
-        result = process_random_sentence(sent, lang_code)
-        results.append(result)
+    batch_size = 64
+    for i in range(0, len(sentences), batch_size):
+        batch = sentences[i:i+batch_size]
+        try:
+            docs = nlp.bulk_process(batch)
+            for sent_text, doc in zip(batch, docs):
+                avg_dep_length = compute_dependency_lengths(doc)
+                sentence_length = sum(len(s.words) for s in doc.sentences)
+                if sentence_length < 3:
+                    continue
+                results.append({
+                    "sentence": sent_text,
+                    "avg_dep_length": avg_dep_length,
+                    "sentence_length": sentence_length
+                })
+        except Exception as e:
+            print(f"   Skipping batch due to error: {e}")
+            continue
+
+        if i % 500 == 0:
+            print(f"   Processed {i}/{len(sentences)} sentences...")
 
     return results
+
+def process_language(lang_name, conllu_path, lang_code):
+    print(f"\n{'='*50}")
+    print(f"Processing: {lang_name.upper()} ({lang_code})")
+    print(f"{'='*50}")
+
+    if not os.path.exists(conllu_path):
+        print(f"   WARNING: File not found — {conllu_path}. Skipping.")
+        return
+
+    print(f"   Reading and cleaning: {conllu_path}")
+    sentences = read_and_clean_conllu(conllu_path)
+    print(f"   Cleaned sentences: {len(sentences)}")
+
+    print(f"   Randomly shuffling words in each sentence...")
+    shuffled = shuffle_sentences(sentences)
+    print(f"   Shuffled sentences: {len(shuffled)}")
+
+    print(f"   Reparsing through Stanza...")
+    results = parse_sentences(shuffled, lang_code)
+    print(f"   Successfully parsed: {len(results)} sentences")
+
+    output_path = os.path.join(OUTPUT_DIR, f"{lang_name}_random_human.json")
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=4)
+
+    # Verify save
+    if os.path.exists(output_path):
+        size = os.path.getsize(output_path)
+        print(f"   SAVED OK: {output_path} ({size} bytes)")
+    else:
+        print(f"   ERROR: File was NOT saved — {output_path}")
+
+def main():
+    for lang_name, (conllu_path, lang_code) in LANGUAGES.items():
+        process_language(lang_name, conllu_path, lang_code)
+
+    print("\n" + "="*50)
+    print("ALL LANGUAGES DONE")
+    print("Files in output dir:")
+    for f in os.listdir(OUTPUT_DIR):
+        size = os.path.getsize(os.path.join(OUTPUT_DIR, f))
+        print(f"   {f} ({size} bytes)")
+
+main()
